@@ -1,103 +1,138 @@
 # ARVritivoApp
 
-A mobile-first **augmented reality web app** for real-time visualisation of
-3-D Gaussian splattings, with support for both **instant** and **progressive**
-(streaming) loading of `.splat` files.
+A mobile-first web portal for uploading, processing, streaming, and viewing
+3D Gaussian splats, with a path toward placement on tracked surfaces in AR.
 
-## Features
+## Project Status
 
-| Feature | Details |
-|---|---|
-| **Gaussian Splatting Renderer** | Custom WebGL shader renders each splat as a depth-sorted Gaussian blob |
-| **Progressive Loading** | Streams `.splat` files over HTTP; new splats appear incrementally as the download progresses |
-| **Instant Loading** | Open a local `.splat` file directly from device storage — no upload required |
-| **WebXR AR** | On Android Chrome 81+ the splat cloud can be placed on a real-world surface detected via hit-testing |
-| **3-D Fallback** | On devices without WebXR support the app falls back to an interactive orbit viewer |
-| **Demo Scene** | A procedurally generated colourful sphere of 20 000 splats loads automatically on start |
-| **URL Param** | Pass `?splat=<url>` to auto-load a specific splat on page load |
+This repository is a fresh start. The sections below define the target
+architecture and initial MVP; they do not describe completed features yet.
 
-## Quick Start
+## Core Decisions
 
-```bash
-# Install dependencies
-npm install
-
-# Start the dev server with HTTPS (required for WebXR)
-npm run dev
-```
-
-> **Why HTTPS?**  WebXR and camera access require a secure origin.  The dev
-> server uses a self-signed certificate (`@vitejs/plugin-basic-ssl`).  Accept
-> the browser's certificate warning once, then access the app from your mobile
-> device using the LAN IP shown in the terminal (e.g. `https://192.168.x.x:5173`).
-
-## Loading Splats
-
-### Local file
-Click **📂 Open .splat** and pick any `.splat` binary from your device.
-
-### Remote URL
-Click **🌐 Load URL** and paste a publicly accessible `.splat` URL.
-CORS headers must allow the request from your origin.
-
-### URL query parameter
-```
-https://<host>:5173/?splat=https://example.com/my_scene.splat
-```
-
-## Building for Production
-
-```bash
-npm run build    # output in dist/
-npm run preview  # preview the production build locally
-```
-
-## Project Structure
-
-```
-├── index.html                   App shell (mobile-optimised)
-├── vite.config.js               Vite + HTTPS config
-├── package.json
-└── src/
-    ├── main.js                  Entry point — wires all modules together
-    ├── style.css                Dark, mobile-first UI styles
-    ├── gaussian/
-    │   ├── shaders.js           GLSL vertex + fragment shaders
-    │   ├── GaussianCloud.js     Three.js Points-based splat renderer
-    │   └── GaussianLoader.js    Streaming fetch-based progressive loader
-    ├── ar/
-    │   └── ARSession.js         WebXR AR session lifecycle + hit-testing
-    └── demo/
-        └── generateDemoSplat.js Procedural demo scene generator
-```
-
-## Splat Format
-
-The app loads the standard **antimatter15/splat** binary format:
-
-| Offset | Type | Field |
+| Area | Choice | Reason |
 |---|---|---|
-| 0 | `float32 × 3` | position (x, y, z) |
-| 12 | `float32 × 3` | scale (sx, sy, sz) |
-| 24 | `uint8 × 4` | colour (R, G, B, A) |
-| 28 | `uint8 × 4` | rotation quaternion (x, y, z, w) |
+| Splat renderer | PlayCanvas Engine | Open-source MIT engine with Gaussian splat and WebXR support |
+| Delivery format | Streamed SOG | Spatial chunks and multiple LODs allow camera-driven progressive loading |
+| Source format | PLY | Preserved as the full-quality master asset |
+| Web application | Next.js on Vercel | Portal, authentication, asset pages, and API endpoints |
+| Asset storage | S3-compatible object storage | Direct large-file uploads and CDN delivery |
+| Conversion | External background worker | Converts PLY to Streamed SOG outside Vercel function limits |
+| Metadata | PostgreSQL | Tracks ownership, processing state, transforms, and asset URLs |
 
-**32 bytes per splat** — any `.splat` file created by tools such as
-[antimatter15/splat](https://github.com/antimatter15/splat) or
-[mkkellogg/GaussianSplats3D](https://github.com/mkkellogg/GaussianSplats3D)
-is compatible.
+PlayCanvas Engine will be installed from npm and embedded directly in the app.
+The hosted PlayCanvas Editor is not required. The engine is MIT licensed and can
+be used in private and commercial applications while retaining its license
+notice.
 
-## Device Support
+## Why Streamed SOG
 
-| Platform | Status |
-|---|---|
-| Android Chrome 81+ | ✅ Full AR via WebXR |
-| iOS Safari | ⚠️ 3-D viewer only (WebXR AR not supported in Safari) |
-| Desktop Chrome / Firefox | ✅ 3-D viewer with orbit controls |
+Downloading a `.splat`, `.ply`, or other monolithic file progressively only
+reveals records in file order. It does not provide spatial, view-dependent
+loading.
 
-## Tech Stack
+Streamed SOG organizes the scene into spatial chunks with multiple levels of
+detail. The viewer can show a coarse scene quickly, then request visible detail
+according to the camera position. This reduces startup time, bandwidth, memory
+use, and mobile GPU load.
 
-- [Three.js](https://threejs.org/) r166 — WebGL renderer, WebXR integration, OrbitControls
-- [Vite](https://vitejs.dev/) 6 — build tool and dev server
-- Custom GLSL shaders — Gaussian point rendering with depth sort
-- Fetch Streams API — progressive file loading
+## Target Workflow
+
+```text
+Browser
+    |-- requests a signed upload URL
+    |-- uploads PLY directly to object storage
+    v
+Database: uploaded -> processing -> ready | failed
+    v
+Background worker
+    |-- validates the source
+    |-- converts PLY to Streamed SOG
+    |-- writes chunks and manifest to object storage
+    v
+CDN -> PlayCanvas viewer -> visible LOD chunks
+```
+
+Large files must not pass through a Vercel serverless function. The browser
+uploads directly to object storage using a short-lived signed URL.
+
+## MVP
+
+1. Sign in and open the asset portal.
+2. Upload a Gaussian splat source file.
+3. See upload and conversion status.
+4. Open the processed asset in a simple PlayCanvas viewer.
+5. Orbit, pan, zoom, reset the camera, and use fullscreen mode.
+6. Share a stable viewer URL.
+7. Stream coarse-to-detailed SOG chunks as they become relevant.
+
+Complex scene editing is intentionally out of scope. This is an upload-and-view
+portal, not a replacement for the PlayCanvas Editor or SuperSplat.
+
+## AR Direction
+
+The rendering and tracking layers remain separate. A future WebXR or native
+tracking system will attach the PlayCanvas splat root entity to an AR anchor.
+
+```text
+Tracked surface, image, or marker
+                            |
+                    AR anchor
+                            |
+            Splat root transform
+                            |
+         Streamed SOG content
+```
+
+Each processed asset should retain:
+
+- Real-world scale in meters
+- Origin and pivot
+- Coordinate system
+- Initial position, rotation, and scale
+- Bounding box
+- Recommended mobile LOD limits
+
+WebXR hit testing is the initial Android browser path. iOS Safari does not offer
+equivalent general-purpose WebXR AR support, so reliable cross-platform AR may
+later require a native ARKit/ARCore wrapper. The same stored assets and
+transforms can be reused.
+
+## Proposed Structure
+
+```text
+app/
+    api/
+        assets/
+        uploads/
+    assets/
+    viewer/
+components/
+    portal/
+    viewer/
+lib/
+    auth/
+    db/
+    storage/
+    playcanvas/
+workers/
+    splat-converter/
+```
+
+The exact structure will be established when the Next.js project and conversion
+worker are initialized.
+
+## Performance Principles
+
+- Stream spatial LOD chunks instead of entire raw splat files.
+- Keep source uploads and runtime assets separate.
+- Set mobile budgets for visible splats, GPU memory, and pixel density.
+- Load only camera-relevant chunks and evict distant detail.
+- Serve immutable processed assets through a CDN.
+- Measure time to first render, frame rate, memory, and downloaded bytes on real
+    mobile devices.
+
+## Expected Costs
+
+PlayCanvas Engine has no runtime or per-view fee. Operational costs come from
+Vercel, object storage and CDN bandwidth, the database, and conversion workers.
