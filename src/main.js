@@ -148,35 +148,38 @@ ARSession.isSupported().then((supported) => {
   }
 });
 
-// ── Tap to place (AR mode) ────────────────────────────────────────────────────
+// ── Tap to place / reset (AR mode) ───────────────────────────────────────────
+// A single handler covers both "place" and "reset" actions to keep the event
+// ordering predictable.
 renderer.domElement.addEventListener('click', () => {
-  if (!arSession.isActive || splatPlaced || !reticle.visible) return;
+  if (!arSession.isActive) return;
 
-  // Decompose the reticle's matrix to get position and rotation
-  const position   = new THREE.Vector3();
-  const quaternion = new THREE.Quaternion();
-  const scale      = new THREE.Vector3();
-  reticle.matrix.decompose(position, quaternion, scale);
+  if (!splatPlaced) {
+    // First tap: place the cloud on the detected surface
+    if (!reticle.visible) return;
 
-  cloud.mesh.position.copy(position);
-  cloud.mesh.quaternion.copy(quaternion);
-  // Scale so the ~1 m demo sphere feels right in a room
-  cloud.mesh.scale.setScalar(0.5);
-  cloud.mesh.visible = true;
-  reticle.visible = false;
-  arHint.hidden = true;
-  splatPlaced = true;
-  setStatus('Placed! Tap to reset.');
+    const position   = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale      = new THREE.Vector3();
+    reticle.matrix.decompose(position, quaternion, scale);
+
+    cloud.mesh.position.copy(position);
+    cloud.mesh.quaternion.copy(quaternion);
+    // Scale so the ~1 m demo sphere feels natural inside a room
+    cloud.mesh.scale.setScalar(0.5);
+    cloud.mesh.visible = true;
+    reticle.visible = false;
+    arHint.hidden = true;
+    splatPlaced = true;
+    setStatus('Placed! Tap to reset.');
+  } else {
+    // Second tap: reset so the user can reposition
+    splatPlaced = false;
+    cloud.mesh.visible = false;
+    reticle.visible = false;
+    setStatus('Point at a flat surface…');
+  }
 });
-
-// Second tap resets placement so the user can reposition
-renderer.domElement.addEventListener('click', () => {
-  if (!arSession.isActive || !splatPlaced) return;
-  splatPlaced = false;
-  cloud.mesh.visible = false;
-  reticle.visible = false;
-  setStatus('Point at a flat surface…');
-}, true);
 
 // ── File input ────────────────────────────────────────────────────────────────
 fileInput.addEventListener('change', () => {

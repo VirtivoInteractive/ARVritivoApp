@@ -98,6 +98,6 @@ is compatible.
 ## Tech Stack
 
 - [Three.js](https://threejs.org/) r166 — WebGL renderer, WebXR integration, OrbitControls
-- [Vite](https://vitejs.dev/) 5 — build tool and dev server
+- [Vite](https://vitejs.dev/) 6 — build tool and dev server
 - Custom GLSL shaders — Gaussian point rendering with depth sort
 - Fetch Streams API — progressive file loading

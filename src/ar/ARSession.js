@@ -7,8 +7,8 @@
  * Browser requirements:
  *  - HTTPS (enforced via Vite's basicSsl plugin in dev)
  *  - Android Chrome 81+ or another WebXR-capable UA
- *  - iOS: WebXR is not supported in Safari; users should view the page in a
- *    WebXR Viewer or use the 3-D (non-AR) fallback mode automatically.
+ *  - iOS Safari: WebXR immersive-ar is not supported.  The app automatically
+ *    falls back to the 3-D orbit viewer on unsupported browsers.
  */
 
 export class ARSession {

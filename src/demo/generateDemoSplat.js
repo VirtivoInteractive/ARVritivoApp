@@ -53,6 +53,11 @@ export function generateDemoSplat(count = 20000, radius = 0.6) {
     view.setFloat32(off + 20, scale, true);
 
     // --- Colour: hue from horizontal angle, lightness from vertical ---
+    // Hue from the horizontal angle around the Y-axis.
+    // atan2(pz, px) is safe here: the rejection-sampling loop above guarantees
+    // that at least one of {px, py, pz} is non-zero, and we only use px and pz
+    // — if both happen to be zero the splat sits on the Y-axis and atan2(0,0)
+    // returns 0 (implementation-defined but consistent), giving a valid hue.
     const hue        = (Math.atan2(pz, px) / Math.PI + 1) * 0.5; // [0, 1]
     const lightness  = 0.45 + (py / radius) * 0.25;               // [0.2, 0.7]
     const [cr, cg, cb] = hslToRgb(hue, 0.85, lightness);

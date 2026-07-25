@@ -34,6 +34,10 @@ export class GaussianCloud {
 
     this._splatCount = 0;
     this._sortFrameInterval = 6; // re-sort every N rendered frames
+    // 6 frames (~100 ms at 60 fps) is a pragmatic balance: frequent enough
+    // that depth-order artefacts are barely noticeable during camera movement,
+    // while cheap enough not to stall the main thread on mid-range mobile GPUs.
+    // Adjust lower (e.g. 1) for highest quality or higher for better performance.
     this._framesSinceSort = 0;
 
     this._geometry = new THREE.BufferGeometry();
