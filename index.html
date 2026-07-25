@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>ARVritivoApp — Gaussian Splatting Viewer</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <!-- Three.js renders here -->
+    <canvas id="canvas"></canvas>
+
+    <!-- DOM overlay shown on top of the AR camera feed -->
+    <div id="overlay">
+      <!-- Top status bar -->
+      <div id="status-bar">
+        <span id="status-label">Loading…</span>
+        <span id="splat-count">0 splats</span>
+      </div>
+
+      <!-- Loading progress bar -->
+      <div id="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div id="progress-fill"></div>
+      </div>
+
+      <!-- Centre hint shown during AR hit-testing -->
+      <div id="ar-hint" hidden>
+        <p>Point camera at a flat surface, then tap to place</p>
+      </div>
+
+      <!-- Bottom control panel -->
+      <div id="controls">
+        <!-- File loader -->
+        <label id="file-label" class="ctrl-btn" title="Open a local .splat file">
+          📂 Open .splat
+          <input id="file-input" type="file" accept=".splat,.ksplat" hidden />
+        </label>
+
+        <!-- URL loader -->
+        <button id="url-btn" class="ctrl-btn" title="Load a .splat from a URL">🌐 Load URL</button>
+
+        <!-- Demo button -->
+        <button id="demo-btn" class="ctrl-btn" title="Generate a procedural demo scene">🎲 Demo</button>
+
+        <!-- AR button injected here by ARSession.js -->
+        <div id="ar-button-container"></div>
+      </div>
+    </div>
+
+    <!-- URL input dialog (hidden by default) -->
+    <dialog id="url-dialog">
+      <form method="dialog">
+        <label for="url-input">Splat URL</label>
+        <input id="url-input" type="url" placeholder="https://example.com/scene.splat" />
+        <div class="dialog-actions">
+          <button type="submit" id="url-ok">Load</button>
+          <button type="button" id="url-cancel">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
