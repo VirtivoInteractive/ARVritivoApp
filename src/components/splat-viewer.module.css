@@ -1,0 +1,104 @@
+.viewer {
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #303631;
+  background: #0e100f;
+}
+
+.canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+.status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 30px;
+  color: #f3f4ef;
+  background: rgba(14, 16, 15, 0.84);
+  text-align: center;
+}
+
+.status strong {
+  margin-top: 4px;
+  font-size: 16px;
+}
+
+.status span {
+  max-width: 440px;
+  color: #9ca39d;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.spinner {
+  color: var(--signal);
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.hud {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 9px 11px;
+  color: #c7ccc7;
+  border: 1px solid #3d433e;
+  background: rgba(17, 20, 18, 0.86);
+  backdrop-filter: blur(10px);
+  font: 10px "Cascadia Code", monospace;
+}
+
+.hud span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.hud i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #717771;
+}
+
+.hud i.online { background: var(--signal); }
+
+.tools {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: flex;
+  gap: 6px;
+}
+
+.tools button {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  color: #e8eae6;
+  border: 1px solid #454b46;
+  background: rgba(17, 20, 18, 0.86);
+  cursor: pointer;
+}
+
+.tools button:hover { color: var(--signal); border-color: var(--signal); }
+
+@media (max-width: 560px) {
+  .hud span:last-child { display: none; }
+  .tools { top: 10px; right: 10px; }
+  .hud { left: 10px; bottom: 10px; }
+}

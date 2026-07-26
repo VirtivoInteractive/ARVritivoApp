@@ -1,12 +1,38 @@
 # ARVritivoApp
 
-A mobile-first web portal for uploading, processing, streaming, and viewing
+A mobile-first web portal for publishing, streaming, and viewing
 3D Gaussian splats, with a path toward placement on tracked surfaces in AR.
 
 ## Project Status
 
-This repository is a fresh start. The sections below define the target
-architecture and initial MVP; they do not describe completed features yet.
+The first MVP slice is implemented:
+
+- Next.js App Router portal with a local demo catalog
+- Registration of a remote Streamed SOG `lod-meta.json` URL
+- Stable, shareable viewer URLs
+- PlayCanvas Engine viewer with streamed LOD loading
+- Orbit, zoom, camera reset, fullscreen, and mobile splat budgets
+
+Authentication, PostgreSQL metadata, and object-storage uploads are the next
+backend milestones. The current catalog is intentionally local and contains an
+official PlayCanvas sample scene.
+
+## Local Development
+
+```bash
+npm install
+npm run dev
+```
+
+Open `http://localhost:3000`. Use the included demo or register a public
+`lod-meta.json` URL whose server permits cross-origin requests.
+
+Validate a production build with:
+
+```bash
+npm run lint
+npm run build
+```
 
 ## Core Decisions
 
@@ -14,11 +40,11 @@ architecture and initial MVP; they do not describe completed features yet.
 |---|---|---|
 | Splat renderer | PlayCanvas Engine | Open-source MIT engine with Gaussian splat and WebXR support |
 | Delivery format | Streamed SOG | Spatial chunks and multiple LODs allow camera-driven progressive loading |
-| Source format | PLY | Preserved as the full-quality master asset |
+| Source format | PLY | Preserved locally as the full-quality master asset |
 | Web application | Next.js on Vercel | Portal, authentication, asset pages, and API endpoints |
-| Asset storage | S3-compatible object storage | Direct large-file uploads and CDN delivery |
-| Conversion | External background worker | Converts PLY to Streamed SOG outside Vercel function limits |
-| Metadata | PostgreSQL | Tracks ownership, processing state, transforms, and asset URLs |
+| Asset storage | S3-compatible object storage | Direct processed-asset uploads and CDN delivery |
+| Conversion | Local tooling | Converts PLY to Streamed SOG before upload, with no cloud compute required |
+| Metadata | PostgreSQL | Tracks ownership, publishing state, transforms, and asset URLs |
 
 PlayCanvas Engine will be installed from npm and embedded directly in the app.
 The hosted PlayCanvas Editor is not required. The engine is MIT licensed and can
@@ -39,29 +65,29 @@ use, and mobile GPU load.
 ## Target Workflow
 
 ```text
-Browser
-    |-- requests a signed upload URL
-    |-- uploads PLY directly to object storage
-    v
-Database: uploaded -> processing -> ready | failed
-    v
-Background worker
-    |-- validates the source
+Local workstation
+    |-- keeps the original PLY as the master asset
     |-- converts PLY to Streamed SOG
-    |-- writes chunks and manifest to object storage
+    |-- verifies the generated manifest and chunks
+    v
+Portal or storage client
+    |-- uploads the processed SOG package to object storage
+    |-- creates the asset metadata record
     v
 CDN -> PlayCanvas viewer -> visible LOD chunks
 ```
 
-Large files must not pass through a Vercel serverless function. The browser
-uploads directly to object storage using a short-lived signed URL.
+The application does not need to receive or convert PLY files. Processed files
+must not pass through a Vercel serverless function; they upload directly to
+object storage using signed URLs or an administrator storage client.
 
 ## MVP
 
 1. Sign in and open the asset portal.
-2. Upload a Gaussian splat source file.
-3. See upload and conversion status.
-4. Open the processed asset in a simple PlayCanvas viewer.
+2. Convert a PLY master asset to Streamed SOG on the local workstation.
+3. Upload the processed SOG manifest and chunks.
+3.1 Confirm that the processed SOG manifest and chunks are correct format.
+4. Open the published asset in a simple PlayCanvas viewer.
 5. Orbit, pan, zoom, reset the camera, and use fullscreen mode.
 6. Share a stable viewer URL.
 7. Stream coarse-to-detailed SOG chunks as they become relevant.
@@ -115,17 +141,21 @@ lib/
     db/
     storage/
     playcanvas/
-workers/
-    splat-converter/
 ```
 
-The exact structure will be established when the Next.js project and conversion
-worker are initialized.
+The exact structure will be established when the Next.js project is initialized.
+
+## Future Automation - do not automatically implement.
+
+An external conversion worker is optional, not required for the MVP. It should
+only be added if users other than the administrator need to upload raw PLY files
+or if publishing must become fully automatic. That worker would validate the
+source, convert it to Streamed SOG, publish the output, and update asset status.
 
 ## Performance Principles
 
 - Stream spatial LOD chunks instead of entire raw splat files.
-- Keep source uploads and runtime assets separate.
+- Keep local PLY masters and uploaded runtime assets separate.
 - Set mobile budgets for visible splats, GPU memory, and pixel density.
 - Load only camera-relevant chunks and evict distant detail.
 - Serve immutable processed assets through a CDN.
@@ -135,4 +165,5 @@ worker are initialized.
 ## Expected Costs
 
 PlayCanvas Engine has no runtime or per-view fee. Operational costs come from
-Vercel, object storage and CDN bandwidth, the database, and conversion workers.
+Vercel, object storage and CDN bandwidth, and the database. Local conversion
+avoids cloud conversion-worker costs for the MVP.
