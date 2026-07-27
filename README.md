@@ -34,6 +34,66 @@ npm run lint
 npm run build
 ```
 
+## Cloudflare R2 Integration
+
+The app can now read published Streamed SOG manifests from Cloudflare R2 and
+generate signed upload URLs from server-side API routes.
+
+Create a local environment file:
+
+```bash
+cp .env.example .env.local
+```
+
+Set these values:
+
+- `R2_ACCOUNT_ID`: Cloudflare account ID
+- `R2_ACCESS_KEY_ID`: R2 API token access key
+- `R2_SECRET_ACCESS_KEY`: R2 API token secret
+- `R2_BUCKET`: bucket that stores processed SOG files
+- `R2_PUBLIC_BASE_URL`: public CDN/custom-domain base URL for the bucket
+- `UPLOAD_PORTAL_PIN`: PIN required to unlock direct uploads in the portal
+
+Example `R2_PUBLIC_BASE_URL` values:
+
+- `https://assets.example.com`
+- `https://pub-<hash>.r2.dev`
+
+When R2 is configured, the home portal tries to list `lod-meta.json` files in
+the bucket. If R2 is not configured, the app falls back to the local demo asset.
+
+### API Endpoints
+
+- `GET /api/assets`
+    - Returns asset rows sourced from R2 when available
+    - Returns the local demo asset in fallback mode
+    - Includes storage connection metadata
+
+- `POST /api/uploads/sign`
+    - Creates a signed `PUT` URL for direct browser/client upload to R2
+    - Requires upload portal PIN auth cookie (set by `/api/uploads/auth`)
+    - JSON body:
+        - `objectKey`: required bucket key, for example `scene-a/lod-meta.json`
+        - `contentType`: optional MIME type
+
+Example request:
+
+```bash
+curl -X POST http://localhost:3000/api/uploads/sign \
+    -H "content-type: application/json" \
+    -d '{"objectKey":"scene-a/lod-meta.json","contentType":"application/json"}'
+```
+
+- `GET /api/uploads/auth`
+    - Returns PIN portal status (`configured`, `authorized`)
+
+- `POST /api/uploads/auth`
+    - Accepts `{ "pin": "..." }`
+    - Sets a secure httpOnly cookie used by upload signing
+
+Allowed upload format (brief): upload one processed SOG export folder that
+contains `lod-meta.json` and its generated chunk files.
+
 ## Core Decisions
 
 | Area | Choice | Reason |
