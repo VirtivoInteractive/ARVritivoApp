@@ -2,6 +2,8 @@ import { AssetPortal } from "@/components/asset-portal";
 import { demoAsset } from "@/lib/assets";
 import { listR2SplatAssets } from "@/lib/r2";
 
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
   const { assets: r2Assets, connected, message } = await listR2SplatAssets();
 

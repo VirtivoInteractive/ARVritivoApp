@@ -21,12 +21,33 @@ type AssetPortalProps = {
   storageMessage?: string;
 };
 
-async function collectFilesFromEntry(entry: FileSystemEntry): Promise<File[]> {
+type UploadSelection = {
+  file: File;
+  relativePath: string;
+};
+
+function basename(path: string) {
+  const parts = path.split("/");
+  return parts[parts.length - 1] || path;
+}
+
+function trimRootFolder(path: string) {
+  return path.replace(/^\//, "").replace(/^[^/]+\//, "");
+}
+
+async function collectFilesFromEntry(
+  entry: FileSystemEntry,
+  prefix: string,
+  includeCurrentName: boolean,
+): Promise<UploadSelection[]> {
   if (entry.isFile) {
     const fileEntry = entry as FileSystemFileEntry;
-    return await new Promise<File[]>((resolve, reject) => {
+    return await new Promise<UploadSelection[]>((resolve, reject) => {
       fileEntry.file(
-        (file) => resolve([file]),
+        (file) => {
+          const relativePath = prefix ? `${prefix}/${file.name}` : file.name;
+          resolve([{ file, relativePath }]);
+        },
         (error) => reject(error),
       );
     });
@@ -38,6 +59,9 @@ async function collectFilesFromEntry(entry: FileSystemEntry): Promise<File[]> {
 
   const directoryEntry = entry as FileSystemDirectoryEntry;
   const reader = directoryEntry.createReader();
+  const nextPrefix = includeCurrentName
+    ? (prefix ? `${prefix}/${directoryEntry.name}` : directoryEntry.name)
+    : prefix;
 
   const readEntries = async (): Promise<FileSystemEntry[]> => {
     const allEntries: FileSystemEntry[] = [];
@@ -58,11 +82,13 @@ async function collectFilesFromEntry(entry: FileSystemEntry): Promise<File[]> {
   };
 
   const entries = await readEntries();
-  const nested = await Promise.all(entries.map((childEntry) => collectFilesFromEntry(childEntry)));
+  const nested = await Promise.all(
+    entries.map((childEntry) => collectFilesFromEntry(childEntry, nextPrefix, true)),
+  );
   return nested.flat();
 }
 
-async function filesFromDropEvent(event: React.DragEvent<HTMLDivElement>): Promise<File[]> {
+async function filesFromDropEvent(event: React.DragEvent<HTMLDivElement>): Promise<UploadSelection[]> {
   const items = Array.from(event.dataTransfer.items ?? []);
   const entries = items
     .map((item) => {
@@ -72,11 +98,29 @@ async function filesFromDropEvent(event: React.DragEvent<HTMLDivElement>): Promi
     .filter((entry): entry is FileSystemEntry => Boolean(entry));
 
   if (entries.length > 0) {
-    const nested = await Promise.all(entries.map((entry) => collectFilesFromEntry(entry)));
+    const nested = await Promise.all(
+      entries.map((entry) => collectFilesFromEntry(entry, "", false)),
+    );
     return nested.flat();
   }
 
-  return Array.from(event.dataTransfer.files ?? []);
+  return Array.from(event.dataTransfer.files ?? []).map((file) => ({
+    file,
+    relativePath: file.name,
+  }));
+}
+
+function filesFromFolderInput(files: FileList | null): UploadSelection[] {
+  return Array.from(files ?? []).map((file) => {
+    const relativePath = file.webkitRelativePath
+      ? trimRootFolder(file.webkitRelativePath)
+      : file.name;
+
+    return {
+      file,
+      relativePath,
+    };
+  });
 }
 
 export function AssetPortal({
@@ -88,7 +132,7 @@ export function AssetPortal({
   const [query, setQuery] = useState("");
   const [pin, setPin] = useState("");
   const [projectName, setProjectName] = useState("");
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<UploadSelection[]>([]);
   const [uploadError, setUploadError] = useState("");
   const [uploadStatus, setUploadStatus] = useState("");
   const [authReady, setAuthReady] = useState(false);
@@ -105,7 +149,7 @@ export function AssetPortal({
   );
 
   const hasManifest = useMemo(
-    () => selectedFiles.some((file) => file.name.toLowerCase() === "lod-meta.json"),
+    () => selectedFiles.some((selected) => basename(selected.relativePath).toLowerCase() === "lod-meta.json"),
     [selectedFiles],
   );
 
@@ -157,7 +201,7 @@ export function AssetPortal({
   function handleFolderSelection(event: React.ChangeEvent<HTMLInputElement>) {
     setUploadError("");
     setUploadStatus("");
-    setSelectedFiles(Array.from(event.currentTarget.files ?? []));
+    setSelectedFiles(filesFromFolderInput(event.currentTarget.files));
   }
 
   async function handleFolderDrop(event: React.DragEvent<HTMLDivElement>) {
@@ -255,8 +299,9 @@ export function AssetPortal({
       let uploaded = 0;
       let manifestPublicUrl = "";
 
-      for (const file of selectedFiles) {
-        const relativePath = (file.webkitRelativePath || file.name).replace(/^[^/]+\//, "");
+      for (const selected of selectedFiles) {
+        const relativePath = selected.relativePath;
+        const file = selected.file;
         const objectKey = `${slug}/${relativePath}`;
 
         setUploadStatus(`Uploading ${uploaded + 1}/${selectedFiles.length}: ${relativePath}`);
@@ -292,7 +337,7 @@ export function AssetPortal({
           throw new Error(`Upload failed for ${relativePath}.`);
         }
 
-        if (relativePath.toLowerCase() === "lod-meta.json" && signed.publicUrl) {
+        if (basename(relativePath).toLowerCase() === "lod-meta.json" && signed.publicUrl) {
           manifestPublicUrl = signed.publicUrl;
         }
 
