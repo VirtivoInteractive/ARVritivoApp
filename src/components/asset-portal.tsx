@@ -267,7 +267,7 @@ export function AssetPortal({
         </div>
         <div className={styles.headingActions}>
           <button className={styles.primaryButton} type="button" onClick={() => folderInputRef.current?.click()}>
-            <FolderUp size={18} /> Upload folder
+            <FolderUp size={18} /> Choose folder
           </button>
           <button className={styles.secondaryButton} type="button" onClick={() => setProjectName("Untitled scene")}>
             <Plus size={18} /> Paste URL
@@ -280,7 +280,7 @@ export function AssetPortal({
           <div className={styles.uploadHeading}>
             <div>
               <h3>Upload your own project</h3>
-              <p>Allowed format: one folder containing lod-meta.json + generated chunk files.</p>
+              <p>Allowed format: one processed SOG folder with lod-meta.json + generated chunk files.</p>
             </div>
             {uploadAuthorized ? (
               <button className={styles.lockButton} type="button" onClick={lockUploadPortal} disabled={authBusy}>
@@ -334,7 +334,7 @@ export function AssetPortal({
                   required
                 />
               </label>
-              <p className={styles.uploadInfo}>Tip: choose the full export folder so relative paths stay intact.</p>
+              <p className={styles.uploadInfo}>Tip: choose the exported folder, not a zip. The browser uploads the files inside it directly to R2.</p>
               <p className={styles.uploadInfo}>
                 {selectedFiles.length} files selected{selectedFiles.length > 0 && !hasManifest ? " (missing lod-meta.json)" : ""}
               </p>

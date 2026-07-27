@@ -92,7 +92,8 @@ curl -X POST http://localhost:3000/api/uploads/sign \
     - Sets a secure httpOnly cookie used by upload signing
 
 Allowed upload format (brief): upload one processed SOG export folder that
-contains `lod-meta.json` and its generated chunk files.
+contains `lod-meta.json` and its generated chunk files. Do not zip it; the
+browser sends the files in the folder directly.
 
 ## Core Decisions
 
