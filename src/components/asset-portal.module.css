@@ -97,10 +97,30 @@
   font-weight: 700;
 }
 
+.secondaryButton {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 0 17px;
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  background: var(--panel);
+  cursor: pointer;
+  font-weight: 700;
+}
+
 .primaryButton:active,
 .publishButton:active {
   transform: translate(2px, 2px);
   box-shadow: 1px 1px 0 var(--ink);
+}
+
+.headingActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .publisher {
@@ -451,7 +471,8 @@
   .topbar { grid-template-columns: 1fr auto; }
   .environment { display: none; }
   .headingRow { align-items: flex-start; flex-direction: column; padding-top: 38px; }
-  .primaryButton { width: 100%; }
+  .headingActions { width: 100%; flex-direction: column; }
+  .primaryButton, .secondaryButton { width: 100%; }
   .publisher { grid-template-columns: 1fr; }
   .publisher label, .publisherIntro, .urlField { grid-column: 1; }
   .publishButton { width: 100%; }

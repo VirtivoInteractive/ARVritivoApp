@@ -36,7 +36,6 @@ export function AssetPortal({
   const [pin, setPin] = useState("");
   const [projectName, setProjectName] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [showPublisher, setShowPublisher] = useState(false);
   const [formError, setFormError] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [uploadStatus, setUploadStatus] = useState("");
@@ -264,105 +263,108 @@ export function AssetPortal({
         <div>
           <p className={styles.eyebrow}>Asset operations</p>
           <h1>Gaussian splat library</h1>
-          <p className={styles.subtitle}>Publish processed scenes and inspect their streamed output.</p>
+          <p className={styles.subtitle}>Upload a processed SOG folder or paste an existing lod-meta.json URL.</p>
         </div>
-        <button className={styles.primaryButton} type="button" onClick={() => setShowPublisher((open) => !open)}>
-          <Plus size={18} /> Publish scene
-        </button>
+        <div className={styles.headingActions}>
+          <button className={styles.primaryButton} type="button" onClick={() => folderInputRef.current?.click()}>
+            <FolderUp size={18} /> Upload folder
+          </button>
+          <button className={styles.secondaryButton} type="button" onClick={() => setProjectName("Untitled scene")}>
+            <Plus size={18} /> Paste URL
+          </button>
+        </div>
       </section>
 
-      {showPublisher && (
-        <div className={styles.publisherStack}>
-          <form className={styles.publisher} onSubmit={publish}>
-            <div className={styles.publisherIntro}>
-              <Upload size={22} />
-              <div><strong>Register processed SOG</strong><span>Already hosted? Paste lod-meta URL.</span></div>
+      <section className={styles.publisherStack}>
+        <section className={styles.uploadPortal} aria-label="SOG Upload Portal">
+          <div className={styles.uploadHeading}>
+            <div>
+              <h3>Upload your own project</h3>
+              <p>Allowed format: one folder containing lod-meta.json + generated chunk files.</p>
             </div>
-            <label>
-              Scene name
-              <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Courtyard scan" required />
-            </label>
-            <label className={styles.urlField}>
-              Manifest URL
-              <input value={manifestUrl} onChange={(event) => setManifestUrl(event.target.value)} placeholder="https://cdn.example.com/scene/lod-meta.json" inputMode="url" required />
-            </label>
-            <button className={styles.publishButton} type="submit">Open viewer <ArrowUpRight size={17} /></button>
-            {formError && <p className={styles.formError} role="alert">{formError}</p>}
-          </form>
-
-          <section className={styles.uploadPortal} aria-label="SOG Upload Portal">
-            <div className={styles.uploadHeading}>
-              <div>
-                <h3>Upload your own project</h3>
-                <p>Allowed format: one folder containing lod-meta.json + all generated chunk files.</p>
-              </div>
-              {uploadAuthorized ? (
-                <button className={styles.lockButton} type="button" onClick={lockUploadPortal} disabled={authBusy}>
-                  <Unlock size={16} /> Lock
-                </button>
-              ) : (
-                <span className={styles.lockBadge}><Lock size={15} /> PIN required</span>
-              )}
-            </div>
-
-            {!authReady ? (
-              <p className={styles.uploadInfo}>Checking portal access...</p>
-            ) : !pinConfigured ? (
-              <p className={styles.uploadError}>Set UPLOAD_PORTAL_PIN on the server to enable uploads.</p>
-            ) : !uploadAuthorized ? (
-              <form className={styles.pinForm} onSubmit={unlockUploadPortal}>
-                <label>
-                  Upload PIN
-                  <input
-                    value={pin}
-                    onChange={(event) => setPin(event.target.value)}
-                    placeholder="Enter PIN"
-                    type="password"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    required
-                  />
-                </label>
-                <button className={styles.publishButton} type="submit" disabled={authBusy}>
-                  {authBusy ? "Checking..." : "Unlock uploads"}
-                </button>
-              </form>
+            {uploadAuthorized ? (
+              <button className={styles.lockButton} type="button" onClick={lockUploadPortal} disabled={authBusy}>
+                <Unlock size={16} /> Lock
+              </button>
             ) : (
-              <form className={styles.uploadForm} onSubmit={uploadProjectFiles}>
-                <label>
-                  Project name
-                  <input
-                    value={projectName}
-                    onChange={(event) => setProjectName(event.target.value)}
-                    placeholder="My warehouse scan"
-                    required
-                  />
-                </label>
-                <label>
-                  Project folder
-                  <input
-                    ref={folderInputRef}
-                    type="file"
-                    multiple
-                    onChange={(event) => setSelectedFiles(Array.from(event.target.files ?? []))}
-                    required
-                  />
-                </label>
-                <p className={styles.uploadInfo}>Tip: choose the full export folder so relative paths stay intact.</p>
-                <p className={styles.uploadInfo}>
-                  {selectedFiles.length} files selected{selectedFiles.length > 0 && !hasManifest ? " (missing lod-meta.json)" : ""}
-                </p>
-                <button className={styles.publishButton} type="submit" disabled={uploadBusy}>
-                  <FolderUp size={17} /> {uploadBusy ? "Uploading..." : "Upload to R2"}
-                </button>
-              </form>
+              <span className={styles.lockBadge}><Lock size={15} /> PIN required</span>
             )}
+          </div>
 
-            {uploadStatus && <p className={styles.uploadInfo}>{uploadStatus}</p>}
-            {uploadError && <p className={styles.uploadError} role="alert">{uploadError}</p>}
-          </section>
-        </div>
-      )}
+          {!authReady ? (
+            <p className={styles.uploadInfo}>Checking portal access...</p>
+          ) : !pinConfigured ? (
+            <p className={styles.uploadError}>Set UPLOAD_PORTAL_PIN in .env.local to enable uploads.</p>
+          ) : !uploadAuthorized ? (
+            <form className={styles.pinForm} onSubmit={unlockUploadPortal}>
+              <label>
+                Upload PIN
+                <input
+                  value={pin}
+                  onChange={(event) => setPin(event.target.value)}
+                  placeholder="Enter PIN"
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  required
+                />
+              </label>
+              <button className={styles.publishButton} type="submit" disabled={authBusy}>
+                {authBusy ? "Checking..." : "Unlock uploads"}
+              </button>
+            </form>
+          ) : (
+            <form className={styles.uploadForm} onSubmit={uploadProjectFiles}>
+              <label>
+                Project name
+                <input
+                  value={projectName}
+                  onChange={(event) => setProjectName(event.target.value)}
+                  placeholder="My warehouse scan"
+                  required
+                />
+              </label>
+              <label>
+                Project folder
+                <input
+                  ref={folderInputRef}
+                  type="file"
+                  multiple
+                  onChange={(event) => setSelectedFiles(Array.from(event.target.files ?? []))}
+                  required
+                />
+              </label>
+              <p className={styles.uploadInfo}>Tip: choose the full export folder so relative paths stay intact.</p>
+              <p className={styles.uploadInfo}>
+                {selectedFiles.length} files selected{selectedFiles.length > 0 && !hasManifest ? " (missing lod-meta.json)" : ""}
+              </p>
+              <button className={styles.publishButton} type="submit" disabled={uploadBusy}>
+                <FolderUp size={17} /> {uploadBusy ? "Uploading..." : "Upload to R2"}
+              </button>
+            </form>
+          )}
+
+          {uploadStatus && <p className={styles.uploadInfo}>{uploadStatus}</p>}
+          {uploadError && <p className={styles.uploadError} role="alert">{uploadError}</p>}
+        </section>
+
+        <form className={styles.publisher} onSubmit={publish}>
+          <div className={styles.publisherIntro}>
+            <Upload size={22} />
+            <div><strong>Open an existing SOG URL</strong><span>Use this only if the scene is already hosted somewhere.</span></div>
+          </div>
+          <label>
+            Scene name
+            <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Courtyard scan" required />
+          </label>
+          <label className={styles.urlField}>
+            Manifest URL
+            <input value={manifestUrl} onChange={(event) => setManifestUrl(event.target.value)} placeholder="https://cdn.example.com/scene/lod-meta.json" inputMode="url" required />
+          </label>
+          <button className={styles.publishButton} type="submit">Open viewer <ArrowUpRight size={17} /></button>
+          {formError && <p className={styles.formError} role="alert">{formError}</p>}
+        </form>
+      </section>
 
       <section className={styles.metrics} aria-label="Library summary">
         <div><span>Published scenes</span><strong>{assets.length.toString().padStart(2, "0")}</strong></div>
