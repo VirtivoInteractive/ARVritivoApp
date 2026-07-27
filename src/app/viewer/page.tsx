@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { SplatViewer } from "@/components/splat-viewer";
 import { demoAsset } from "@/lib/assets";
+import { getGlobalSplatRotation } from "@/lib/r2";
 import styles from "./viewer.module.css";
 
 type ViewerPageProps = {
@@ -12,6 +13,7 @@ export default async function ViewerPage({ searchParams }: ViewerPageProps) {
   const params = await searchParams;
   const name = params.name || demoAsset.name;
   const manifestUrl = params.url || demoAsset.manifestUrl;
+  const initialRotation = await getGlobalSplatRotation(manifestUrl);
 
   return (
     <main className={styles.page}>
@@ -20,7 +22,7 @@ export default async function ViewerPage({ searchParams }: ViewerPageProps) {
         <div><span>Streamed SOG</span><h1>{name}</h1></div>
         <span className={styles.live}><i /> Live viewer</span>
       </header>
-      <SplatViewer manifestUrl={manifestUrl} />
+      <SplatViewer key={manifestUrl} manifestUrl={manifestUrl} initialRotation={initialRotation} />
     </main>
   );
 }

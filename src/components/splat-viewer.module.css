@@ -97,8 +97,95 @@
 
 .tools button:hover { color: var(--signal); border-color: var(--signal); }
 
+.adminPanel {
+  position: absolute;
+  top: 60px;
+  right: 14px;
+  width: 220px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  color: #dde2db;
+  border: 1px solid #454b46;
+  background: rgba(17, 20, 18, 0.94);
+  backdrop-filter: blur(10px);
+}
+
+.adminHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.adminHeader strong {
+  font-size: 13px;
+}
+
+.adminHeader span,
+.adminPanel label {
+  color: #aab1aa;
+  font-size: 11px;
+}
+
+.adminSource {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  margin-top: 2px;
+  padding: 3px 7px;
+  border: 1px solid #39403a;
+  background: #141815;
+}
+
+.adminPanel label {
+  display: grid;
+  gap: 4px;
+}
+
+.adminPanel input {
+  height: 36px;
+  padding: 0 9px;
+  color: #eef1ec;
+  border: 1px solid #454b46;
+  background: #171b18;
+}
+
+.adminButton {
+  height: 38px;
+  color: #eef1ec;
+  border: 1px solid #454b46;
+  background: #171b18;
+  cursor: pointer;
+}
+
+.adminButton:hover {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
+.adminButton:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.adminSuccess,
+.adminError {
+  margin: 0;
+  font-size: 11px;
+}
+
+.adminSuccess {
+  color: #84c95e;
+}
+
+.adminError {
+  color: #ff8f8f;
+}
+
 @media (max-width: 560px) {
   .hud span:last-child { display: none; }
   .tools { top: 10px; right: 10px; }
   .hud { left: 10px; bottom: 10px; }
+  .adminPanel { top: 56px; right: 10px; width: min(220px, calc(100% - 20px)); }
 }

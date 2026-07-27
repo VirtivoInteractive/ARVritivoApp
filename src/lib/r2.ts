@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+
 import {
   GetObjectCommand,
   ListObjectsV2Command,
@@ -13,6 +15,12 @@ type ListedR2Assets = {
   assets: SplatAsset[];
   connected: boolean;
   message?: string;
+};
+
+export type SplatRotation = {
+  x: number;
+  y: number;
+  z: number;
 };
 
 type R2Config = {
@@ -89,6 +97,20 @@ function buildPublicObjectUrl(baseUrl: string | undefined, key: string) {
 
 function keyToAssetId(key: string) {
   return key.replace(/\//g, "-").replace(/[^a-zA-Z0-9-_]/g, "");
+}
+
+function rotationObjectKey(manifestUrl: string) {
+  const hash = createHash("sha256").update(manifestUrl).digest("hex");
+  return `__arvritivo/rotations/${hash}.json`;
+}
+
+function sanitizeRotation(rotation: SplatRotation): SplatRotation {
+  const clamp = (value: number) => Math.max(-360, Math.min(360, Number(value) || 0));
+  return {
+    x: clamp(rotation.x),
+    y: clamp(rotation.y),
+    z: clamp(rotation.z),
+  };
 }
 
 export async function listR2SplatAssets(): Promise<ListedR2Assets> {
@@ -199,4 +221,71 @@ export async function createR2ReadUrl(key: string) {
   });
 
   return getSignedUrl(client, command, { expiresIn: 60 * 10 });
+}
+
+type RotationDocument = {
+  manifestUrl: string;
+  rotation: SplatRotation;
+  updatedAt: string;
+};
+
+async function bodyToText(body: unknown) {
+  if (!body) {
+    return "";
+  }
+
+  const typed = body as { transformToString?: () => Promise<string> };
+  if (typed.transformToString) {
+    return typed.transformToString();
+  }
+
+  return "";
+}
+
+export async function getGlobalSplatRotation(manifestUrl: string): Promise<SplatRotation | null> {
+  const config = getOptionalConfig();
+  if (!config) {
+    return null;
+  }
+
+  const client = createR2Client(config);
+
+  try {
+    const response = await client.send(
+      new GetObjectCommand({
+        Bucket: config.bucket,
+        Key: rotationObjectKey(manifestUrl),
+      }),
+    );
+
+    const raw = await bodyToText(response.Body);
+    const parsed = JSON.parse(raw) as Partial<RotationDocument>;
+    if (!parsed.rotation) {
+      return null;
+    }
+
+    return sanitizeRotation(parsed.rotation);
+  } catch {
+    return null;
+  }
+}
+
+export async function setGlobalSplatRotation(manifestUrl: string, rotation: SplatRotation) {
+  const config = getRequiredConfig();
+  const client = createR2Client(config);
+
+  const payload: RotationDocument = {
+    manifestUrl,
+    rotation: sanitizeRotation(rotation),
+    updatedAt: new Date().toISOString(),
+  };
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: rotationObjectKey(manifestUrl),
+      ContentType: "application/json",
+      Body: JSON.stringify(payload),
+    }),
+  );
 }
