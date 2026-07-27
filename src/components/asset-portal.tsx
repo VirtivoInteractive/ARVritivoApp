@@ -2,16 +2,13 @@
 
 import Link from "next/link";
 import {
-  ArrowUpRight,
   Box,
   Database,
   FolderUp,
   Lock,
-  Plus,
   Radio,
   Search,
   Unlock,
-  Upload,
 } from "lucide-react";
 import { FormEvent, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { SplatAsset } from "@/lib/assets";
@@ -24,6 +21,64 @@ type AssetPortalProps = {
   storageMessage?: string;
 };
 
+async function collectFilesFromEntry(entry: FileSystemEntry): Promise<File[]> {
+  if (entry.isFile) {
+    const fileEntry = entry as FileSystemFileEntry;
+    return await new Promise<File[]>((resolve, reject) => {
+      fileEntry.file(
+        (file) => resolve([file]),
+        (error) => reject(error),
+      );
+    });
+  }
+
+  if (!entry.isDirectory) {
+    return [];
+  }
+
+  const directoryEntry = entry as FileSystemDirectoryEntry;
+  const reader = directoryEntry.createReader();
+
+  const readEntries = async (): Promise<FileSystemEntry[]> => {
+    const allEntries: FileSystemEntry[] = [];
+
+    for (;;) {
+      const batch = await new Promise<FileSystemEntry[]>((resolve, reject) => {
+        reader.readEntries(resolve, reject);
+      });
+
+      if (batch.length === 0) {
+        break;
+      }
+
+      allEntries.push(...batch);
+    }
+
+    return allEntries;
+  };
+
+  const entries = await readEntries();
+  const nested = await Promise.all(entries.map((childEntry) => collectFilesFromEntry(childEntry)));
+  return nested.flat();
+}
+
+async function filesFromDropEvent(event: React.DragEvent<HTMLDivElement>): Promise<File[]> {
+  const items = Array.from(event.dataTransfer.items ?? []);
+  const entries = items
+    .map((item) => {
+      const dragItem = item as DataTransferItem & { webkitGetAsEntry?: () => FileSystemEntry | null };
+      return dragItem.webkitGetAsEntry?.() ?? null;
+    })
+    .filter((entry): entry is FileSystemEntry => Boolean(entry));
+
+  if (entries.length > 0) {
+    const nested = await Promise.all(entries.map((entry) => collectFilesFromEntry(entry)));
+    return nested.flat();
+  }
+
+  return Array.from(event.dataTransfer.files ?? []);
+}
+
 export function AssetPortal({
   assets,
   storageConnected,
@@ -31,12 +86,9 @@ export function AssetPortal({
   storageMessage,
 }: AssetPortalProps) {
   const [query, setQuery] = useState("");
-  const [name, setName] = useState("");
-  const [manifestUrl, setManifestUrl] = useState("");
   const [pin, setPin] = useState("");
   const [projectName, setProjectName] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [formError, setFormError] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [uploadStatus, setUploadStatus] = useState("");
   const [authReady, setAuthReady] = useState(false);
@@ -44,6 +96,7 @@ export function AssetPortal({
   const [uploadAuthorized, setUploadAuthorized] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
+  const [dropActive, setDropActive] = useState(false);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const deferredQuery = useDeferredValue(query);
 
@@ -97,22 +150,34 @@ export function AssetPortal({
     };
   }, []);
 
-  function publish(event: FormEvent<HTMLFormElement>) {
+  function openFolderPicker() {
+    folderInputRef.current?.click();
+  }
+
+  function handleFolderSelection(event: React.ChangeEvent<HTMLInputElement>) {
+    setUploadError("");
+    setUploadStatus("");
+    setSelectedFiles(Array.from(event.currentTarget.files ?? []));
+  }
+
+  async function handleFolderDrop(event: React.DragEvent<HTMLDivElement>) {
     event.preventDefault();
-    setFormError("");
+    event.stopPropagation();
+    setDropActive(false);
 
-    try {
-      const parsed = new URL(manifestUrl);
-      if (!parsed.pathname.endsWith("lod-meta.json")) {
-        throw new Error("Use the Streamed SOG lod-meta.json URL.");
-      }
-
-      window.location.assign(
-        `/viewer?name=${encodeURIComponent(name || "Untitled scene")}&url=${encodeURIComponent(parsed.toString())}`,
-      );
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Enter a valid manifest URL.");
+    if (!uploadAuthorized || uploadBusy) {
+      return;
     }
+
+    const droppedFiles = await filesFromDropEvent(event);
+    if (droppedFiles.length === 0) {
+      setUploadError("Drop a processed SOG folder, not a single manifest file.");
+      return;
+    }
+
+    setUploadError("");
+    setUploadStatus("");
+    setSelectedFiles(droppedFiles);
   }
 
   async function unlockUploadPortal(event: FormEvent<HTMLFormElement>) {
@@ -263,14 +328,11 @@ export function AssetPortal({
         <div>
           <p className={styles.eyebrow}>Asset operations</p>
           <h1>Gaussian splat library</h1>
-          <p className={styles.subtitle}>Upload a processed SOG folder or paste an existing lod-meta.json URL.</p>
+          <p className={styles.subtitle}>Upload a processed SOG folder and stream it directly from your R2 bucket.</p>
         </div>
         <div className={styles.headingActions}>
-          <button className={styles.primaryButton} type="button" onClick={() => folderInputRef.current?.click()}>
+          <button className={styles.primaryButton} type="button" onClick={openFolderPicker}>
             <FolderUp size={18} /> Choose folder
-          </button>
-          <button className={styles.secondaryButton} type="button" onClick={() => setProjectName("Untitled scene")}>
-            <Plus size={18} /> Paste URL
           </button>
         </div>
       </section>
@@ -324,16 +386,41 @@ export function AssetPortal({
                   required
                 />
               </label>
-              <label>
-                Project folder
-                <input
-                  ref={folderInputRef}
-                  type="file"
-                  multiple
-                  onChange={(event) => setSelectedFiles(Array.from(event.target.files ?? []))}
-                  required
-                />
-              </label>
+              <input
+                ref={folderInputRef}
+                type="file"
+                multiple
+                onChange={handleFolderSelection}
+                className={styles.hiddenInput}
+              />
+
+              <div
+                className={`${styles.dropZone} ${dropActive ? styles.dropZoneActive : ""}`}
+                onClick={openFolderPicker}
+                onDragEnter={(event) => {
+                  event.preventDefault();
+                  if (uploadAuthorized && !uploadBusy) {
+                    setDropActive(true);
+                  }
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  if (uploadAuthorized && !uploadBusy) {
+                    setDropActive(true);
+                  }
+                }}
+                onDragLeave={() => setDropActive(false)}
+                onDrop={handleFolderDrop}
+                role="button"
+                tabIndex={0}
+              >
+                <FolderUp size={22} />
+                <div>
+                  <strong>Drop a folder here</strong>
+                  <span>Choose the exported SOG folder. It should contain lod-meta.json and chunk files.</span>
+                </div>
+              </div>
+
               <p className={styles.uploadInfo}>Tip: choose the exported folder, not a zip. The browser uploads the files inside it directly to R2.</p>
               <p className={styles.uploadInfo}>
                 {selectedFiles.length} files selected{selectedFiles.length > 0 && !hasManifest ? " (missing lod-meta.json)" : ""}
@@ -347,23 +434,6 @@ export function AssetPortal({
           {uploadStatus && <p className={styles.uploadInfo}>{uploadStatus}</p>}
           {uploadError && <p className={styles.uploadError} role="alert">{uploadError}</p>}
         </section>
-
-        <form className={styles.publisher} onSubmit={publish}>
-          <div className={styles.publisherIntro}>
-            <Upload size={22} />
-            <div><strong>Open an existing SOG URL</strong><span>Use this only if the scene is already hosted somewhere.</span></div>
-          </div>
-          <label>
-            Scene name
-            <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Courtyard scan" required />
-          </label>
-          <label className={styles.urlField}>
-            Manifest URL
-            <input value={manifestUrl} onChange={(event) => setManifestUrl(event.target.value)} placeholder="https://cdn.example.com/scene/lod-meta.json" inputMode="url" required />
-          </label>
-          <button className={styles.publishButton} type="submit">Open viewer <ArrowUpRight size={17} /></button>
-          {formError && <p className={styles.formError} role="alert">{formError}</p>}
-        </form>
       </section>
 
       <section className={styles.metrics} aria-label="Library summary">
@@ -392,7 +462,7 @@ export function AssetPortal({
             <span>{asset.detail}</span>
             <span>{asset.updatedAt}</span>
             <span className={styles.ready}><i /> {asset.status}</span>
-            <ArrowUpRight size={18} />
+            <span aria-hidden="true">{"->"}</span>
           </Link>
         ))}
       </section>

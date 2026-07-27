@@ -248,6 +248,50 @@
   gap: 10px;
 }
 
+.hiddenInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.dropZone {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border: 1px dashed var(--ink);
+  background: #fffef8;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.dropZone:hover,
+.dropZoneActive {
+  border-color: #587326;
+  background: #eef5df;
+  transform: translateY(-1px);
+}
+
+.dropZone strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.dropZone span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .pinForm label,
 .uploadForm label {
   display: flex;
