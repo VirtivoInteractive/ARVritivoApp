@@ -23,6 +23,12 @@ export type SplatRotation = {
   z: number;
 };
 
+export type ViewerCameraPosition = {
+  x: number;
+  y: number;
+  z: number;
+};
+
 type R2Config = {
   accountId: string;
   accessKeyId: string;
@@ -104,12 +110,26 @@ function rotationObjectKey(manifestUrl: string) {
   return `__arvritivo/rotations/${hash}.json`;
 }
 
+function cameraObjectKey(manifestUrl: string) {
+  const hash = createHash("sha256").update(manifestUrl).digest("hex");
+  return `__arvritivo/cameras/${hash}.json`;
+}
+
 function sanitizeRotation(rotation: SplatRotation): SplatRotation {
   const clamp = (value: number) => Math.max(-360, Math.min(360, Number(value) || 0));
   return {
     x: clamp(rotation.x),
     y: clamp(rotation.y),
     z: clamp(rotation.z),
+  };
+}
+
+function sanitizeCameraPosition(camera: ViewerCameraPosition): ViewerCameraPosition {
+  const clamp = (value: number) => Math.max(-10_000, Math.min(10_000, Number(value) || 0));
+  return {
+    x: clamp(camera.x),
+    y: clamp(camera.y),
+    z: clamp(camera.z),
   };
 }
 
@@ -229,6 +249,12 @@ type RotationDocument = {
   updatedAt: string;
 };
 
+type CameraDocument = {
+  manifestUrl: string;
+  camera: ViewerCameraPosition;
+  updatedAt: string;
+};
+
 async function bodyToText(body: unknown) {
   if (!body) {
     return "";
@@ -284,6 +310,54 @@ export async function setGlobalSplatRotation(manifestUrl: string, rotation: Spla
     new PutObjectCommand({
       Bucket: config.bucket,
       Key: rotationObjectKey(manifestUrl),
+      ContentType: "application/json",
+      Body: JSON.stringify(payload),
+    }),
+  );
+}
+
+export async function getGlobalCameraPosition(manifestUrl: string): Promise<ViewerCameraPosition | null> {
+  const config = getOptionalConfig();
+  if (!config) {
+    return null;
+  }
+
+  const client = createR2Client(config);
+
+  try {
+    const response = await client.send(
+      new GetObjectCommand({
+        Bucket: config.bucket,
+        Key: cameraObjectKey(manifestUrl),
+      }),
+    );
+
+    const raw = await bodyToText(response.Body);
+    const parsed = JSON.parse(raw) as Partial<CameraDocument>;
+    if (!parsed.camera) {
+      return null;
+    }
+
+    return sanitizeCameraPosition(parsed.camera);
+  } catch {
+    return null;
+  }
+}
+
+export async function setGlobalCameraPosition(manifestUrl: string, camera: ViewerCameraPosition) {
+  const config = getRequiredConfig();
+  const client = createR2Client(config);
+
+  const payload: CameraDocument = {
+    manifestUrl,
+    camera: sanitizeCameraPosition(camera),
+    updatedAt: new Date().toISOString(),
+  };
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: cameraObjectKey(manifestUrl),
       ContentType: "application/json",
       Body: JSON.stringify(payload),
     }),

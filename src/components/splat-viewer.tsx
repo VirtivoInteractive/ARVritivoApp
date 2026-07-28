@@ -1,6 +1,16 @@
 "use client";
 
-import { Expand, LoaderCircle, Lock, RotateCcw, Settings2, TriangleAlert, Unlock, ZoomIn, ZoomOut } from "lucide-react";
+import {
+  Expand,
+  LoaderCircle,
+  Lock,
+  RotateCcw,
+  Settings2,
+  TriangleAlert,
+  Unlock,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import styles from "./splat-viewer.module.css";
 
@@ -12,7 +22,15 @@ type Rotation = {
   z: number;
 };
 
+type CameraPosition = {
+  x: number;
+  y: number;
+  z: number;
+};
+
 const DEFAULT_ROTATION: Rotation = { x: -90, y: 0, z: 0 };
+const DEFAULT_CAMERA: CameraPosition = { x: 0.18, y: -3.81, z: 13.5 };
+const FOCUS_POINT = { x: 18, y: -1.3, z: 13.5 };
 
 function clampRotationValue(value: number) {
   if (!Number.isFinite(value)) {
@@ -22,31 +40,64 @@ function clampRotationValue(value: number) {
   return Math.max(-360, Math.min(360, value));
 }
 
+function clampCameraValue(value: number) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.max(-10_000, Math.min(10_000, value));
+}
+
+function orbitFromPosition(position: CameraPosition) {
+  const dx = position.x - FOCUS_POINT.x;
+  const dy = position.y - FOCUS_POINT.y;
+  const dz = position.z - FOCUS_POINT.z;
+  const distance = Math.max(0.5, Math.sqrt(dx * dx + dy * dy + dz * dz));
+  const pitch = Math.asin(Math.max(-1, Math.min(1, dy / distance))) * 180 / Math.PI;
+  const yaw = Math.atan2(dx, dz) * 180 / Math.PI;
+
+  return {
+    yaw,
+    pitch,
+    distance,
+  };
+}
+
 type SplatViewerProps = {
   manifestUrl: string;
   initialRotation: Rotation | null;
+  initialCamera: CameraPosition | null;
 };
 
-export function SplatViewer({ manifestUrl, initialRotation }: SplatViewerProps) {
+export function SplatViewer({ manifestUrl, initialRotation, initialCamera }: SplatViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<(() => void) | null>(null);
   const zoomRef = useRef<((factor: number) => void) | null>(null);
+  const cameraPositionRef = useRef<((position: CameraPosition) => void) | null>(null);
   const splatRef = useRef<{ setLocalEulerAngles: (x: number, y: number, z: number) => void } | null>(null);
   const rotationRef = useRef<Rotation>(initialRotation ?? DEFAULT_ROTATION);
+
   const [status, setStatus] = useState<ViewerStatus>("loading-engine");
   const [error, setError] = useState("");
   const [showAdmin, setShowAdmin] = useState(false);
   const [rotation, setRotation] = useState<Rotation>(initialRotation ?? DEFAULT_ROTATION);
+  const [camera, setCamera] = useState<CameraPosition>(initialCamera ?? DEFAULT_CAMERA);
   const [adminPin, setAdminPin] = useState("");
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
   const [saveError, setSaveError] = useState("");
-  const hasGlobalPreset = initialRotation !== null;
+
+  const hasGlobalRotationPreset = initialRotation !== null;
+  const hasGlobalCameraPreset = initialCamera !== null;
 
   useEffect(() => {
     rotationRef.current = rotation;
     splatRef.current?.setLocalEulerAngles(rotation.x, rotation.y, rotation.z);
   }, [rotation]);
+
+  useEffect(() => {
+    cameraPositionRef.current?.(camera);
+  }, [camera]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -118,40 +169,56 @@ export function SplatViewer({ manifestUrl, initialRotation }: SplatViewerProps) 
         app.scene.gsplat.lodUnderfillLimit = 8;
         app.scene.gsplat.splatBudget = pc.platform.mobile ? 1_000_000 : 4_000_000;
 
-        const camera = new pc.Entity("camera");
-        camera.addComponent("camera", {
+        const cameraEntity = new pc.Entity("camera");
+        cameraEntity.addComponent("camera", {
           clearColor: new pc.Color(0.055, 0.063, 0.058),
           fov: 65,
           nearClip: 0.05,
           farClip: 1000,
         });
-        app.root.addChild(camera);
+        app.root.addChild(cameraEntity);
 
-        const focus = new pc.Vec3(18, -1.3, 13.5);
-        let yaw = -90;
-        let pitch = -8;
-        let distance = 18;
+        const focus = new pc.Vec3(FOCUS_POINT.x, FOCUS_POINT.y, FOCUS_POINT.z);
+        const startCamera = initialCamera ?? DEFAULT_CAMERA;
+        const startOrbit = orbitFromPosition(startCamera);
+        let yaw = startOrbit.yaw;
+        let pitch = startOrbit.pitch;
+        let distance = startOrbit.distance;
 
         const frameCamera = () => {
           const yawRad = yaw * Math.PI / 180;
           const pitchRad = pitch * Math.PI / 180;
-          camera.setPosition(
+          cameraEntity.setPosition(
             focus.x + distance * Math.cos(pitchRad) * Math.sin(yawRad),
             focus.y + distance * Math.sin(pitchRad),
             focus.z + distance * Math.cos(pitchRad) * Math.cos(yawRad),
           );
-          camera.lookAt(focus);
+          cameraEntity.lookAt(focus);
         };
-        frameRef.current = () => {
-          yaw = -90;
-          pitch = -8;
-          distance = 18;
+
+        const applyCameraPosition = (position: CameraPosition) => {
+          const orbit = orbitFromPosition(position);
+          yaw = orbit.yaw;
+          pitch = orbit.pitch;
+          distance = orbit.distance;
           frameCamera();
         };
+
+        cameraPositionRef.current = applyCameraPosition;
+
+        frameRef.current = () => {
+          const resetOrbit = orbitFromPosition(initialCamera ?? DEFAULT_CAMERA);
+          yaw = resetOrbit.yaw;
+          pitch = resetOrbit.pitch;
+          distance = resetOrbit.distance;
+          frameCamera();
+        };
+
         zoomRef.current = (factor: number) => {
           distance = Math.max(0.5, Math.min(150, distance * factor));
           frameCamera();
         };
+
         frameCamera();
 
         const pointers = new Map<number, { x: number; y: number }>();
@@ -173,11 +240,7 @@ export function SplatViewer({ manifestUrl, initialRotation }: SplatViewerProps) 
 
         const pointerDown = (event: PointerEvent) => {
           pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-          if (pointers.size === 1) {
-            dragging = true;
-          } else {
-            dragging = false;
-          }
+          dragging = pointers.size === 1;
           lastX = event.clientX;
           lastY = event.clientY;
           if (pointers.size === 2) {
@@ -198,7 +261,6 @@ export function SplatViewer({ manifestUrl, initialRotation }: SplatViewerProps) 
               distance = Math.max(0.5, Math.min(150, distance * factor));
               frameCamera();
             }
-
             pinchDistance = nextPinch;
             return;
           }
@@ -233,6 +295,7 @@ export function SplatViewer({ manifestUrl, initialRotation }: SplatViewerProps) 
           distance = Math.max(0.5, Math.min(150, distance * Math.exp(event.deltaY * 0.001)));
           frameCamera();
         };
+
         canvas.addEventListener("pointerdown", pointerDown);
         canvas.addEventListener("pointermove", pointerMove);
         canvas.addEventListener("pointerup", pointerUp);
@@ -264,7 +327,7 @@ export function SplatViewer({ manifestUrl, initialRotation }: SplatViewerProps) 
         const splat = new pc.Entity("splat");
         splat.addComponent("gsplat", { asset });
         splat.setLocalEulerAngles(rotationRef.current.x, rotationRef.current.y, rotationRef.current.z);
-          splatRef.current = splat;
+        splatRef.current = splat;
         app.root.addChild(splat);
 
         const component = splat.gsplat;
@@ -291,6 +354,7 @@ export function SplatViewer({ manifestUrl, initialRotation }: SplatViewerProps) 
           canvas.removeEventListener("wheel", wheel);
           frameRef.current = null;
           zoomRef.current = null;
+          cameraPositionRef.current = null;
           splatRef.current = null;
           app.destroy();
         };
@@ -308,7 +372,7 @@ export function SplatViewer({ manifestUrl, initialRotation }: SplatViewerProps) 
       initialSizeObserver?.disconnect();
       destroy?.();
     };
-  }, [manifestUrl]);
+  }, [manifestUrl, initialCamera]);
 
   async function enterFullscreen() {
     await canvasRef.current?.parentElement?.requestFullscreen();
@@ -324,6 +388,62 @@ export function SplatViewer({ manifestUrl, initialRotation }: SplatViewerProps) 
 
   function resetRotation() {
     setRotation(DEFAULT_ROTATION);
+  }
+
+  function updateCamera(axis: keyof CameraPosition, value: string) {
+    const numeric = Number(value);
+    setCamera((current) => ({
+      ...current,
+      [axis]: clampCameraValue(numeric),
+    }));
+  }
+
+  function resetCamera() {
+    setCamera(initialCamera ?? DEFAULT_CAMERA);
+  }
+
+  async function saveAllGlobally() {
+    setSaveBusy(true);
+    setSaveStatus("");
+    setSaveError("");
+
+    try {
+      const rotationResponse = await fetch("/api/viewer-rotation", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          manifestUrl,
+          pin: adminPin,
+          rotation,
+        }),
+      });
+
+      if (!rotationResponse.ok) {
+        const payload = (await rotationResponse.json()) as { error?: string };
+        throw new Error(payload.error || "Could not save global rotation.");
+      }
+
+      const cameraResponse = await fetch("/api/viewer-camera", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          manifestUrl,
+          pin: adminPin,
+          camera,
+        }),
+      });
+
+      if (!cameraResponse.ok) {
+        const payload = (await cameraResponse.json()) as { error?: string };
+        throw new Error(payload.error || "Could not save global camera.");
+      }
+
+      setSaveStatus("Rotation and camera saved for all users.");
+    } catch (reason) {
+      setSaveError(reason instanceof Error ? reason.message : "Could not save global preset.");
+    } finally {
+      setSaveBusy(false);
+    }
   }
 
   async function saveRotationGlobally() {
@@ -347,9 +467,38 @@ export function SplatViewer({ manifestUrl, initialRotation }: SplatViewerProps) 
         throw new Error(payload.error || "Could not save global rotation.");
       }
 
-      setSaveStatus("Saved for all users.");
+      setSaveStatus("Rotation saved for all users.");
     } catch (reason) {
       setSaveError(reason instanceof Error ? reason.message : "Could not save global rotation.");
+    } finally {
+      setSaveBusy(false);
+    }
+  }
+
+  async function saveCameraGlobally() {
+    setSaveBusy(true);
+    setSaveStatus("");
+    setSaveError("");
+
+    try {
+      const response = await fetch("/api/viewer-camera", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          manifestUrl,
+          pin: adminPin,
+          camera,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string };
+        throw new Error(payload.error || "Could not save global camera.");
+      }
+
+      setSaveStatus("Camera saved for all users.");
+    } catch (reason) {
+      setSaveError(reason instanceof Error ? reason.message : "Could not save global camera.");
     } finally {
       setSaveBusy(false);
     }
@@ -370,7 +519,7 @@ export function SplatViewer({ manifestUrl, initialRotation }: SplatViewerProps) 
         <span>Drag to orbit · Pinch or zoom buttons</span>
       </div>
       <div className={styles.tools}>
-        <button type="button" onClick={() => setShowAdmin((open) => !open)} title="Rotation admin" aria-label="Rotation admin"><Settings2 size={19} /></button>
+        <button type="button" onClick={() => setShowAdmin((open) => !open)} title="Viewer admin" aria-label="Viewer admin"><Settings2 size={19} /></button>
         <button type="button" onClick={() => zoomRef.current?.(0.85)} title="Zoom in" aria-label="Zoom in"><ZoomIn size={19} /></button>
         <button type="button" onClick={() => zoomRef.current?.(1.15)} title="Zoom out" aria-label="Zoom out"><ZoomOut size={19} /></button>
         <button type="button" onClick={() => frameRef.current?.()} title="Reset camera" aria-label="Reset camera"><RotateCcw size={19} /></button>
@@ -382,7 +531,7 @@ export function SplatViewer({ manifestUrl, initialRotation }: SplatViewerProps) 
             <strong>Rotation</strong>
             <span>Use your admin PIN to save globally</span>
             <span className={styles.adminSource}>
-              {hasGlobalPreset ? <Lock size={12} /> : <Unlock size={12} />} {hasGlobalPreset ? "Global preset" : "Default rotation"}
+              {hasGlobalRotationPreset ? <Lock size={12} /> : <Unlock size={12} />} {hasGlobalRotationPreset ? "Global preset" : "Default rotation"}
             </span>
           </div>
           <label>
@@ -397,14 +546,43 @@ export function SplatViewer({ manifestUrl, initialRotation }: SplatViewerProps) 
             Z
             <input type="number" value={rotation.z} onChange={(event) => updateRotation("z", event.target.value)} step="1" />
           </label>
+          <button type="button" className={styles.adminButton} onClick={saveRotationGlobally} disabled={saveBusy}>
+            {saveBusy ? "Saving..." : "Save global rotation"}
+          </button>
+          <button type="button" className={styles.adminButton} onClick={resetRotation}>Reset rotation</button>
+
+          <div className={styles.adminHeader}>
+            <strong>Initial camera</strong>
+            <span>Set startup camera position for all users</span>
+            <span className={styles.adminSource}>
+              {hasGlobalCameraPreset ? <Lock size={12} /> : <Unlock size={12} />} {hasGlobalCameraPreset ? "Global preset" : "Default camera"}
+            </span>
+          </div>
+          <label>
+            Cam X
+            <input type="number" value={camera.x} onChange={(event) => updateCamera("x", event.target.value)} step="0.1" />
+          </label>
+          <label>
+            Cam Y
+            <input type="number" value={camera.y} onChange={(event) => updateCamera("y", event.target.value)} step="0.1" />
+          </label>
+          <label>
+            Cam Z
+            <input type="number" value={camera.z} onChange={(event) => updateCamera("z", event.target.value)} step="0.1" />
+          </label>
+
           <label>
             Admin PIN
             <input type="password" value={adminPin} onChange={(event) => setAdminPin(event.target.value)} placeholder="Enter PIN" />
           </label>
-          <button type="button" className={styles.adminButton} onClick={saveRotationGlobally} disabled={saveBusy}>
-            {saveBusy ? "Saving..." : "Save global rotation"}
+          <button type="button" className={styles.adminButton} onClick={saveAllGlobally} disabled={saveBusy}>
+            {saveBusy ? "Saving..." : "Save all (rotation + camera)"}
           </button>
-          <button type="button" className={styles.adminButton} onClick={resetRotation}>Reset to default</button>
+          <button type="button" className={styles.adminButton} onClick={saveCameraGlobally} disabled={saveBusy}>
+            {saveBusy ? "Saving..." : "Save global camera"}
+          </button>
+          <button type="button" className={styles.adminButton} onClick={resetCamera}>Reset camera preset</button>
+
           {saveStatus && <p className={styles.adminSuccess}>{saveStatus}</p>}
           {saveError && <p className={styles.adminError}>{saveError}</p>}
         </aside>
